@@ -20,6 +20,17 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        // A fixed test key kept in the repo, so a build from CI installs over a build from
+        // Android Studio without uninstalling (which would wipe the people list).
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
