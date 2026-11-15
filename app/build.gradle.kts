@@ -21,18 +21,26 @@ android {
     }
 
     signingConfigs {
-        // A fixed test key kept in the repo, so a build from CI installs over a build from
-        // Android Studio without uninstalling (which would wipe the people list).
+        // A fixed test key kept in the repo, so every test build installs over the last one
+        // without uninstalling (which would wipe the people list).
         getByName("debug") {
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+            // Android itself only needs v2 here, but some phone makers' installers still
+            // look for the older JAR signature and call the package invalid without it.
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 
     buildTypes {
         release {
+            // Until there is a real release key, the installable test build is a
+            // non-debuggable release build signed with the test key.
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
     }

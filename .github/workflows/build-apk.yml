@@ -17,7 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      APK_NAME: ares-call-guard-debug.apk
+      APK_NAME: ares-call-guard.apk
       RELEASE_TAG: phase-1-test-build
     steps:
       - uses: actions/checkout@v4
@@ -29,15 +29,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Run unit tests and build the debug APK
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug
+      - name: Run unit tests and build the test APK
+        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk "$APK_NAME"
+        run: cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ares-call-guard-debug-apk
+          name: ares-call-guard-apk
           path: ${{ env.APK_NAME }}
 
       # One release that always carries the newest build, so the phone download link never changes.
@@ -45,9 +45,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notes="Debug build of commit ${GITHUB_SHA} from ${GITHUB_REF_NAME}. For testing only."
+          notes="Test build of commit ${GITHUB_SHA} from ${GITHUB_REF_NAME}. For testing only."
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "$APK_NAME" --clobber
+            gh release delete-asset "$RELEASE_TAG" ares-call-guard-debug.apk --yes || true
             gh release edit "$RELEASE_TAG" --notes "$notes"
           else
             gh release create "$RELEASE_TAG" "$APK_NAME" \
