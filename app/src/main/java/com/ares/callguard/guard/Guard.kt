@@ -29,14 +29,14 @@ class Guard @Inject constructor(
     @ApplicationContext private val context: Context,
     @ApplicationScope private val scope: CoroutineScope,
     private val settings: SettingsRepository,
-    private val setupChecker: SetupChecker,
+    private val permissions: PermissionOrchestrator,
     private val sessions: CallSessionManager,
 ) {
     private val recheck = MutableStateFlow(0)
 
     val health: StateFlow<GuardHealth?> =
         combine(settings.settings.map { it.guardWanted }.distinctUntilChanged(), recheck) { wanted, _ ->
-            GuardHealth.from(wanted, setupChecker.missingSteps())
+            GuardHealth.from(wanted, permissions.missingSteps())
         }.stateIn(scope, SharingStarted.Eagerly, null)
 
     init {

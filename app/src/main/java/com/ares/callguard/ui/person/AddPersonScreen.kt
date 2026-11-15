@@ -34,16 +34,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ares.callguard.domain.model.PriorityLevel
 import com.ares.callguard.ui.components.AresTopBar
 import com.ares.callguard.ui.components.PersonAvatar
 import com.ares.callguard.ui.theme.Spacing
 
-private const val STEP_COUNT = 4
+private const val STEP_COUNT = 5
+private const val PLATFORMS_STEP = 2
 
 @Composable
 fun AddPersonScreen(onDone: () -> Unit, viewModel: PersonFormViewModel = hiltViewModel()) {
     val form by viewModel.form.collectAsStateWithLifecycle()
-    val recentNames by viewModel.recentWhatsAppNames.collectAsStateWithLifecycle()
+    val recentNames by viewModel.recentCallerNames.collectAsStateWithLifecycle()
     var step by rememberSaveable { mutableIntStateOf(0) }
 
     val pickContact = rememberLauncherForActivityResult(PickContactPhone()) { uri ->
@@ -54,6 +56,7 @@ fun AddPersonScreen(onDone: () -> Unit, viewModel: PersonFormViewModel = hiltVie
     }
 
     LaunchedEffect(form.isFinished) { if (form.isFinished) onDone() }
+    LaunchedEffect(step) { if (step == PLATFORMS_STEP) viewModel.suggestAppNames() }
     BackHandler(enabled = step > 0) { step-- }
 
     Scaffold(
@@ -110,25 +113,26 @@ fun AddPersonScreen(onDone: () -> Unit, viewModel: PersonFormViewModel = hiltVie
                         StepHeading("Which numbers does ${form.name.trim()} call from?")
                         PhoneNumberFields(
                             numbers = form.phoneNumbers,
+                            internationalForm = viewModel::internationalForm,
                             onChange = viewModel::setPhoneNumber,
                             onAdd = viewModel::addPhoneNumber,
                             onRemove = viewModel::removePhoneNumber,
                         )
                     }
 
-                    2 -> {
-                        StepHeading("Do they call you on WhatsApp?")
-                        Text(
-                            "Leave this empty if they don't.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        WhatsAppNameField(
-                            name = form.whatsAppName,
-                            onChange = viewModel::setWhatsAppName,
+                    PLATFORMS_STEP -> {
+                        StepHeading("How do they call you?")
+                        PlatformChooser(
+                            form = form,
                             recentNames = recentNames,
-                            sharedWith = form.sharesWhatsAppNameWith,
+                            onToggle = viewModel::setPlatformEnabled,
+                            onNameChange = viewModel::setAppName,
                         )
+                    }
+
+                    3 -> {
+                        StepHeading("What should happen when they call?")
+                        PriorityChoice(form.priority, viewModel::setPriority)
                     }
 
                     else -> Summary(form)
@@ -161,22 +165,22 @@ private fun Summary(form: PersonForm) {
         Text(form.name.trim(), style = MaterialTheme.typography.headlineMedium)
     }
 
-    if (!form.canSave) {
-        Text(
-            "Add a phone number or a WhatsApp name so ARES can recognise their calls.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.error,
-        )
+    val problem = form.problem
+    if (problem != null) {
+        Text(problem, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
         return
     }
 
     val person = form.toPerson(id = 0)
-    person.phoneNumbers.forEach { SummaryLine("Phone", it) }
-    person.identities.forEach { SummaryLine(it.platform.label, it.displayName) }
-    Text(
-        "Their calls will ring through, even when your phone is silent. You can change this later.",
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    person.phoneNumbers.forEach { SummaryLine("Phone number", it) }
+    SummaryLine("Calls you on", person.platforms.sorted().joinToString { it.label })
+    person.identities.forEach { SummaryLine("Name in ${it.platform.label}", it.displayName) }
+    SummaryLine(
+        "When they call",
+        when (person.priority) {
+            PriorityLevel.RING_THROUGH -> "Rings through, even when your phone is silent"
+            PriorityLevel.MISSED_ALERT_ONLY -> "Missed-call alert only"
+        },
     )
 }
 

@@ -24,7 +24,11 @@ class DetectionLog @Inject constructor() {
         _entries.update { (listOf(entry) + it).take(MAX_ENTRIES) }
     }
 
+    fun clear() {
+        _entries.value = emptyList()
+    }
+
     private companion object {
-        const val MAX_ENTRIES = 60
+        const val MAX_ENTRIES = 150
     }
 }

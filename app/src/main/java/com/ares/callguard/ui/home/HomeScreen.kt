@@ -16,10 +16,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,7 +46,11 @@ import com.ares.callguard.ui.setup.stepsLeftMessage
 import com.ares.callguard.ui.theme.Spacing
 
 @Composable
-fun HomeScreen(onAddPerson: () -> Unit, viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(
+    onAddPerson: () -> Unit,
+    onOpenSettings: () -> Unit,
+    viewModel: HomeViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val openSetupStep = rememberSetupLauncher(onReturned = viewModel::recheckSetup)
 
@@ -66,7 +72,7 @@ fun HomeScreen(onAddPerson: () -> Unit, viewModel: HomeViewModel = hiltViewModel
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Wordmark()
+            Wordmark(onOpenSettings)
 
             Column(
                 modifier = Modifier.padding(vertical = Spacing.lg),
@@ -86,11 +92,18 @@ fun HomeScreen(onAddPerson: () -> Unit, viewModel: HomeViewModel = hiltViewModel
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (current.health.status == GuardStatus.NEEDS_ATTENTION) {
+                Text(
+                    text = readinessLine(current),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                val missing = current.health.missingRequiredSteps
+                if (current.health.status == GuardStatus.NEEDS_ATTENTION && missing.isNotEmpty()) {
                     Spacer(Modifier.size(Spacing.sm))
                     SetupWarning(
-                        message = stepsLeftMessage(current.health.missingSteps),
-                        onClick = { openSetupStep(current.health.missingSteps.first()) },
+                        message = stepsLeftMessage(missing),
+                        onClick = { openSetupStep(missing.first()) },
                     )
                 }
             }
@@ -110,8 +123,12 @@ fun HomeScreen(onAddPerson: () -> Unit, viewModel: HomeViewModel = hiltViewModel
 }
 
 @Composable
-private fun Wordmark() {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+private fun Wordmark(onOpenSettings: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
         Icon(
             painterResource(R.drawable.ic_shield),
             contentDescription = null,
@@ -122,7 +139,11 @@ private fun Wordmark() {
             text = "ARES CALL GUARD",
             style = MaterialTheme.typography.titleMedium.copy(letterSpacing = 0.18.em),
             color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
         )
+        IconButton(onClick = onOpenSettings) {
+            Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+        }
     }
 }
 
@@ -150,7 +171,15 @@ private fun statusLine(health: GuardHealth): String = when (health.status) {
     GuardStatus.ACTIVE -> "Watching for important calls"
     GuardStatus.INACTIVE -> "Not watching"
     GuardStatus.NEEDS_ATTENTION ->
-        if (health.missingSteps.size == 1) "ARES needs one more step" else "ARES needs a few more steps"
+        if (health.missingRequiredSteps.size == 1) "ARES needs one more step" else "ARES needs a few more steps"
+}
+
+/** Whether ARES could protect a call right now, whatever the switch says. */
+private fun readinessLine(state: HomeUiState): String = when {
+    state.health.missingRequiredSteps.isNotEmpty() -> "Not ready: setup isn't finished"
+    state.peopleWhoCanReachYou == 0 -> "Ready, once you add a person"
+    state.alertMutedByDoNotDisturb -> "Do Not Disturb is muting alarms, so alerts may only vibrate"
+    else -> "Ready"
 }
 
 private fun peopleLine(count: Int): String = when (count) {

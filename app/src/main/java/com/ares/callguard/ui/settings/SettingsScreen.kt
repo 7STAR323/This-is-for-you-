@@ -95,6 +95,16 @@ fun SettingsScreen(onOpen: (SettingsPage) -> Unit, viewModel: SettingsViewModel 
             }
 
             SettingsCard {
+                SwitchRow(
+                    title = "Only trust phone numbers",
+                    description = "App calls then count only when the app reveals the caller's " +
+                        "number. Most apps don't, so leave this off unless names worry you.",
+                    checked = current.numberMatchOnly,
+                    onCheckedChange = viewModel::setNumberMatchOnly,
+                )
+            }
+
+            SettingsCard {
                 SettingsPage.entries.forEachIndexed { index, page ->
                     if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     LinkRow(page.title) { onOpen(page) }

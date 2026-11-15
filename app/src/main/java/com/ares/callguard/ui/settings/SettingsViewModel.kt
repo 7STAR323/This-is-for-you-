@@ -22,7 +22,7 @@ class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
     private val guard: Guard,
     private val sessions: CallSessionManager,
-    detectionLog: DetectionLog,
+    private val log: DetectionLog,
 ) : ViewModel() {
 
     /** Null while loading. */
@@ -31,7 +31,7 @@ class SettingsViewModel @Inject constructor(
 
     val health: StateFlow<GuardHealth?> = guard.health
 
-    val detectionLog: StateFlow<List<DetectionLogEntry>> = detectionLog.entries
+    val detectionLog: StateFlow<List<DetectionLogEntry>> = log.entries
 
     fun setGraceSeconds(seconds: Int) = change { it.copy(graceSeconds = seconds) }
 
@@ -43,7 +43,11 @@ class SettingsViewModel @Inject constructor(
 
     fun setKeepAwakeStepsConfirmed(confirmed: Boolean) = change { it.copy(keepAwakeStepsConfirmed = confirmed) }
 
+    fun setNumberMatchOnly(only: Boolean) = change { it.copy(numberMatchOnly = only) }
+
     fun finishOnboarding() = change { it.copy(onboardingSeen = true) }
+
+    fun clearDetectionLog() = log.clear()
 
     fun recheckSetup() = guard.recheckSetup()
 

@@ -100,7 +100,7 @@ class CallSessionMachineTest {
     fun `call ending during the alert shows a missed call`() {
         val result = ringThrough.run(quietPhone, RingingStopped, Missed)
         assertEquals(
-            listOf(StartAlert, StopAlert, ShowMissedCall, Record(CallOutcome.MISSED)),
+            listOf(StartAlert, StopAlert, ShowMissedCall, Record(CallOutcome.MISSED_AFTER_ALERT)),
             result.effects,
         )
     }

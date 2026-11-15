@@ -2,14 +2,16 @@ package com.ares.callguard.detection
 
 import android.telephony.TelephonyManager
 import com.ares.callguard.di.ApplicationScope
+import com.ares.callguard.domain.matching.CallerIdentity
 import com.ares.callguard.domain.matching.ContactMatcher
+import com.ares.callguard.domain.matching.MatchResult
 import com.ares.callguard.domain.model.Platform
 import com.ares.callguard.domain.repository.PeopleRepository
 import com.ares.callguard.domain.session.SessionEvent
-import com.ares.callguard.guard.CallSessionManager
 import com.ares.callguard.guard.DetectionLog
 import com.ares.callguard.guard.Guard
 import com.ares.callguard.guard.PriorityCall
+import com.ares.callguard.guard.PriorityCallSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -25,7 +27,7 @@ class SimCallTracker @Inject constructor(
     private val people: PeopleRepository,
     private val matcher: ContactMatcher,
     private val callLog: CallLogReader,
-    private val sessions: CallSessionManager,
+    private val sessions: PriorityCallSink,
     private val log: DetectionLog,
 ) {
     private class RingingCall(
@@ -59,9 +61,19 @@ class SimCallTracker @Inject constructor(
         if (incomingNumber.isNullOrBlank() || ringing != null) return
         if (!guard.isWanted()) return
 
-        val person = matcher.matchPhoneNumber(incomingNumber, people.currentPeople())
-        log.add(if (person == null) "Phone call: not one of your people" else "Phone call from ${person.name}")
-        if (person == null) return
+        val caller = CallerIdentity(phoneNumbers = listOf(incomingNumber))
+        val person = when (val result = matcher.match(Platform.SIM, caller, people.currentPeople())) {
+            is MatchResult.Matched -> result.person
+            MatchResult.Ambiguous -> {
+                log.add("Phone call: ignored, this number is saved for more than one of your people")
+                return
+            }
+            else -> {
+                log.add("Phone call: ignored, the number is not one of your people's")
+                return
+            }
+        }
+        log.add("Phone call: caller is one of your people, confirmed by phone number")
 
         val startedAt = System.currentTimeMillis()
         val call = RingingCall(

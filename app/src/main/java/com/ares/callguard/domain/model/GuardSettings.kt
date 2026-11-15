@@ -8,6 +8,10 @@ data class GuardSettings(
     val vibrationStyle: VibrationStyle = VibrationStyle.STRONG,
     val raiseVolumeForAlerts: Boolean = true,
     val keepAwakeStepsConfirmed: Boolean = false,
+    /** When on, an app call only counts if the app revealed a phone number that matches. */
+    val numberMatchOnly: Boolean = false,
+    /** Apps whose ringing call notification ARES has actually recognised on this phone. */
+    val platformsSeenRinging: Set<Platform> = emptySet(),
 ) {
     companion object {
         const val DEFAULT_GRACE_SECONDS = 10

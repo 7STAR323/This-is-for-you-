@@ -10,6 +10,7 @@ import android.net.Uri
 import androidx.core.app.NotificationCompat
 import com.ares.callguard.MainActivity
 import com.ares.callguard.R
+import com.ares.callguard.detection.CallNotificationClassifier
 import com.ares.callguard.domain.model.Platform
 import com.ares.callguard.guard.ActiveAlert
 import com.ares.callguard.guard.PriorityCall
@@ -17,10 +18,17 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The visible half of an alert; the audible half is [AlertPlayer]. */
+interface AlertDisplay {
+    fun showAlert(alert: ActiveAlert)
+    fun cancelAlert()
+    fun showMissedCall(call: PriorityCall)
+}
+
 @Singleton
 class AlertNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : AlertDisplay {
     private val manager = context.getSystemService(NotificationManager::class.java)
 
     fun createChannels() {
@@ -29,10 +37,15 @@ class AlertNotifier @Inject constructor(
         manager.createNotificationChannels(
             listOf(
                 silentChannel(CHANNEL_WATCHING, R.string.channel_watching, NotificationManager.IMPORTANCE_LOW),
-                silentChannel(CHANNEL_ALERT, R.string.channel_alert, NotificationManager.IMPORTANCE_HIGH),
-                silentChannel(CHANNEL_MISSED, R.string.channel_missed, NotificationManager.IMPORTANCE_HIGH),
+                silentChannel(CHANNEL_ALERT, R.string.channel_alert, NotificationManager.IMPORTANCE_HIGH)
+                    .apply { setBypassDnd(true) },
+                silentChannel(CHANNEL_MISSED, R.string.channel_missed, NotificationManager.IMPORTANCE_HIGH)
+                    .apply { setBypassDnd(true) },
             ),
         )
+        // A channel's Do Not Disturb setting is fixed when it is created, so the channels
+        // from the first version are replaced rather than edited.
+        RETIRED_CHANNELS.forEach(manager::deleteNotificationChannel)
     }
 
     fun watchingNotification(): Notification =
@@ -44,7 +57,7 @@ class AlertNotifier @Inject constructor(
             .setShowWhen(false)
             .build()
 
-    fun showAlert(alert: ActiveAlert) {
+    override fun showAlert(alert: ActiveAlert) {
         val openAlert = activity(
             Intent(context, AlertActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
@@ -65,9 +78,9 @@ class AlertNotifier @Inject constructor(
         manager.notify(ALERT_NOTIFICATION_ID, notification)
     }
 
-    fun cancelAlert() = manager.cancel(ALERT_NOTIFICATION_ID)
+    override fun cancelAlert() = manager.cancel(ALERT_NOTIFICATION_ID)
 
-    fun showMissedCall(call: PriorityCall) {
+    override fun showMissedCall(call: PriorityCall) {
         val id = MISSED_NOTIFICATION_BASE + (call.person.id.toInt() * 10 + call.platform.ordinal)
         val builder = NotificationCompat.Builder(context, CHANNEL_MISSED)
             .setSmallIcon(R.drawable.ic_shield)
@@ -92,7 +105,8 @@ class AlertNotifier @Inject constructor(
     /** Opens the right app ready to call back. It never places the call itself. */
     private fun callBackIntent(call: PriorityCall): Intent? = when (call.platform) {
         Platform.SIM -> call.phoneNumber?.let { Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", it, null)) }
-        Platform.WHATSAPP -> WHATSAPP_PACKAGES.firstNotNullOfOrNull(context.packageManager::getLaunchIntentForPackage)
+        else -> CallNotificationClassifier.packagesOf(call.platform)
+            .firstNotNullOfOrNull(context.packageManager::getLaunchIntentForPackage)
     }
 
     private fun silentChannel(id: String, nameRes: Int, importance: Int) =
@@ -116,9 +130,8 @@ class AlertNotifier @Inject constructor(
         private const val MISSED_NOTIFICATION_BASE = 1000
 
         private const val CHANNEL_WATCHING = "watching"
-        private const val CHANNEL_ALERT = "priority_alert"
-        private const val CHANNEL_MISSED = "missed_call"
-
-        private val WHATSAPP_PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
+        private const val CHANNEL_ALERT = "priority_alert_2"
+        private const val CHANNEL_MISSED = "missed_call_2"
+        private val RETIRED_CHANNELS = listOf("priority_alert", "missed_call")
     }
 }

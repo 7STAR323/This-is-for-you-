@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -65,10 +66,17 @@ class HistoryViewModel @Inject constructor(
     }
 }
 
+private enum class HistoryFilter(val label: String, val shows: (CallRecord) -> Boolean) {
+    ALL("All", { true }),
+    MISSED("Missed", { it.outcome.wasMissed }),
+    ALERTED("Alerted", { it.outcome.alertWasShown }),
+}
+
 @Composable
 fun HistoryScreen(viewModel: HistoryViewModel = hiltViewModel()) {
     val records by viewModel.records.collectAsStateWithLifecycle()
     var confirmClear by rememberSaveable { mutableStateOf(false) }
+    var filter by rememberSaveable { mutableStateOf(HistoryFilter.ALL) }
 
     Scaffold(
         topBar = {
@@ -97,7 +105,28 @@ fun HistoryScreen(viewModel: HistoryViewModel = hiltViewModel()) {
                 contentPadding = PaddingValues(Spacing.md),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
-                items(list, key = CallRecord::id) { CallRecordRow(it) }
+                item(key = "filter") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        HistoryFilter.entries.forEach { option ->
+                            FilterChip(
+                                selected = option == filter,
+                                onClick = { filter = option },
+                                label = { Text(option.label) },
+                            )
+                        }
+                    }
+                }
+                val shown = list.filter(filter.shows)
+                if (shown.isEmpty()) {
+                    item(key = "none") {
+                        Text(
+                            "No calls like that in the last 30 days.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(Spacing.md),
+                        )
+                    }
+                }
+                items(shown, key = CallRecord::id) { CallRecordRow(it) }
             }
         }
     }
@@ -158,5 +187,6 @@ private val CallOutcome.label: String
         CallOutcome.ANSWERED_AFTER_ALERT -> "Answered after alert"
         CallOutcome.DECLINED -> "Declined"
         CallOutcome.MISSED -> "Missed"
+        CallOutcome.MISSED_AFTER_ALERT -> "Missed after alert"
         CallOutcome.STOPPED_BY_YOU -> "Stopped by you"
     }

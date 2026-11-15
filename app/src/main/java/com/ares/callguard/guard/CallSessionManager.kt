@@ -1,6 +1,6 @@
 package com.ares.callguard.guard
 
-import com.ares.callguard.alert.AlertNotifier
+import com.ares.callguard.alert.AlertDisplay
 import com.ares.callguard.alert.AlertPlayer
 import com.ares.callguard.di.ApplicationScope
 import com.ares.callguard.domain.model.CallOutcome
@@ -40,9 +40,21 @@ data class ActiveAlert(
     val platform: Platform?,
 )
 
+/** Where detectors report the life of a priority call. */
+interface PriorityCallSink {
+    fun onIncoming(call: PriorityCall)
+    fun onRingingStopped(key: String)
+
+    /** [outcome] must be Answered, Declined or Missed. */
+    fun onOutcome(key: String, outcome: SessionEvent)
+
+    /** For apps that only tell us about a call once it has already been missed. */
+    fun onMissedAfterTheFact(call: PriorityCall)
+}
+
 /**
  * Runs every priority call that is currently ringing: one grace timer and one state machine
- * each, with a single shared alert. All state is confined to the main thread.
+ * each, with a single shared alert. All state is confined to one thread.
  */
 @Singleton
 class CallSessionManager @Inject constructor(
@@ -51,8 +63,10 @@ class CallSessionManager @Inject constructor(
     private val history: HistoryRepository,
     private val soundState: PhoneSoundState,
     private val player: AlertPlayer,
-    private val notifier: AlertNotifier,
-) {
+    private val display: AlertDisplay,
+    private val log: DetectionLog,
+) : PriorityCallSink {
+
     private class Session(val call: PriorityCall, val machine: CallSessionMachine) {
         var state: SessionState = SessionState.Ringing
         var graceTimer: Job? = null
@@ -67,53 +81,77 @@ class CallSessionManager @Inject constructor(
     private val _activeAlert = MutableStateFlow<ActiveAlert?>(null)
     val activeAlert: StateFlow<ActiveAlert?> = _activeAlert.asStateFlow()
 
-    fun onIncoming(call: PriorityCall) = scope.launch {
-        if (isAlreadyTracked(call)) return@launch
+    override fun onIncoming(call: PriorityCall) {
+        scope.launch {
+            if (isAlreadyTracked(call)) {
+                log.add("${call.platform.label}: already following this call, no second timer")
+                return@launch
+            }
 
-        val graceSeconds = settings.settings.first().graceSeconds
-        val session = Session(call, CallSessionMachine(call.person.priority))
-        sessions[call.key] = session
-        session.graceTimer = launch {
-            delay(graceSeconds.seconds)
-            dispatch(call.key, SessionEvent.GraceElapsed(phoneIsQuiet = soundState.isQuiet()))
+            val graceSeconds = settings.settings.first().graceSeconds
+            val session = Session(call, CallSessionMachine(call.person.priority))
+            sessions[call.key] = session
+            log.add("${call.platform.label}: waiting $graceSeconds s before alerting")
+
+            session.graceTimer = launch {
+                delay(graceSeconds.seconds)
+                val quiet = soundState.isQuiet()
+                log.add(
+                    "${call.platform.label}: still ringing after $graceSeconds s, phone is " +
+                        if (quiet) "quiet" else "ringing out loud, so no alert is needed",
+                )
+                dispatch(call.key, SessionEvent.GraceElapsed(phoneIsQuiet = quiet))
+            }
+            // If a detector loses track of the call, don't leave an alert ringing forever.
+            session.watchdog = launch {
+                delay(LONGEST_PLAUSIBLE_RING)
+                log.add("${call.platform.label}: gave up on a call that never reported an ending")
+                dispatch(call.key, SessionEvent.Cancelled)
+            }
         }
-        // If a detector loses track of the call, don't leave an alert ringing forever.
-        session.watchdog = launch {
-            delay(LONGEST_PLAUSIBLE_RING)
-            dispatch(call.key, SessionEvent.Cancelled)
+    }
+
+    override fun onRingingStopped(key: String) {
+        scope.launch { dispatch(key, SessionEvent.RingingStopped) }
+    }
+
+    override fun onOutcome(key: String, outcome: SessionEvent) {
+        scope.launch { dispatch(key, outcome) }
+    }
+
+    override fun onMissedAfterTheFact(call: PriorityCall) {
+        scope.launch {
+            if (wasJustReportedMissed(call)) return@launch
+            log.add("${call.platform.label}: missed call reported after it ended")
+            announceMissed(call)
+            record(call, CallOutcome.MISSED)
         }
     }
 
-    fun onRingingStopped(key: String) = scope.launch { dispatch(key, SessionEvent.RingingStopped) }
-
-    /** [outcome] must be Answered, Declined or Missed. */
-    fun onOutcome(key: String, outcome: SessionEvent) = scope.launch { dispatch(key, outcome) }
-
-    /** For apps that only tell us about a call once it has already been missed. */
-    fun onMissedAfterTheFact(call: PriorityCall) = scope.launch {
-        if (wasJustReportedMissed(call)) return@launch
-        announceMissed(call)
-        record(call, CallOutcome.MISSED)
-    }
-
-    fun stopAlertByUser() = scope.launch {
-        stopTestAlert()
-        sessions.keys.toList().forEach { dispatch(it, SessionEvent.StoppedByUser) }
-    }
-
-    fun cancelEverything() = scope.launch {
-        stopTestAlert()
-        sessions.keys.toList().forEach { dispatch(it, SessionEvent.Cancelled) }
-        refreshAlert()
-    }
-
-    fun sendTestAlert() = scope.launch {
-        testTimeout?.cancel()
-        isTesting = true
-        refreshAlert()
-        testTimeout = scope.launch {
-            delay(TEST_ALERT_LENGTH)
+    fun stopAlertByUser() {
+        scope.launch {
             stopTestAlert()
+            sessions.keys.toList().forEach { dispatch(it, SessionEvent.StoppedByUser) }
+        }
+    }
+
+    fun cancelEverything() {
+        scope.launch {
+            stopTestAlert()
+            sessions.keys.toList().forEach { dispatch(it, SessionEvent.Cancelled) }
+            refreshAlert()
+        }
+    }
+
+    fun sendTestAlert() {
+        scope.launch {
+            testTimeout?.cancel()
+            isTesting = true
+            refreshAlert()
+            testTimeout = scope.launch {
+                delay(TEST_ALERT_LENGTH)
+                stopTestAlert()
+            }
         }
     }
 
@@ -153,7 +191,10 @@ class CallSessionManager @Inject constructor(
             SessionEffect.CancelGraceTimer -> session.graceTimer?.cancel()
             SessionEffect.StartAlert, SessionEffect.StopAlert -> refreshAlert()
             SessionEffect.ShowMissedCall -> announceMissed(session.call)
-            is SessionEffect.Record -> record(session.call, effect.outcome)
+            is SessionEffect.Record -> {
+                log.add("${session.call.platform.label}: call finished, ${effect.outcome.name.lowercase().replace('_', ' ')}")
+                record(session.call, effect.outcome)
+            }
         }
     }
 
@@ -165,27 +206,50 @@ class CallSessionManager @Inject constructor(
             isTesting -> ActiveAlert(TEST_CALLER_NAME, platform = null)
             else -> null
         }
-        if (wanted == _activeAlert.value) return
+        val previous = _activeAlert.value
+        if (wanted == previous) return
         _activeAlert.value = wanted
+
+        // A second caller joining an alert only changes the name on screen; restarting the
+        // ringtone would make it stutter.
+        if (wanted != null && previous != null) {
+            display.showAlert(wanted)
+            return
+        }
 
         if (wanted == null) {
             player.stop()
-            notifier.cancelAlert()
-        } else {
-            player.start(settings.settings.first(), vibrateOnly = soundState.isInCall())
-            notifier.showAlert(wanted)
+            display.cancelAlert()
+            log.add("Alert stopped")
+            return
         }
+
+        val vibrateOnly = alerting != null && soundState.isOnAnotherCall(alerting.call.platform)
+        player.start(settings.settings.first(), vibrateOnly)
+        display.showAlert(wanted)
+        log.add(
+            when {
+                vibrateOnly -> "Alert started: vibration and screen only, because you are on another call"
+                soundState.doNotDisturbSilencesAlert() ->
+                    "Alert started, but Do Not Disturb is silencing alarms so it may only vibrate"
+                else -> "Alert started: sound, vibration and screen"
+            },
+        )
     }
 
     private suspend fun announceMissed(call: PriorityCall) {
         lastMissedAt[call.person.id to call.platform] = System.currentTimeMillis()
-        notifier.showMissedCall(call)
-        player.playMissedCallChime(settings.settings.first(), vibrateOnly = soundState.isInCall())
+        display.showMissedCall(call)
+        player.playMissedCallChime(
+            settings.settings.first(),
+            vibrateOnly = soundState.isOnAnotherCall(call.platform),
+        )
     }
 
     private suspend fun record(call: PriorityCall, outcome: CallOutcome) {
-        history.add(CallRecord(0, call.person.name, call.platform, System.currentTimeMillis(), outcome))
-        history.removeOlderThan(System.currentTimeMillis() - HISTORY_RETENTION_MILLIS)
+        val now = System.currentTimeMillis()
+        history.add(CallRecord(0, call.person.name, call.platform, now, outcome))
+        history.removeOlderThan(now - HISTORY_RETENTION_MILLIS)
     }
 
     companion object {

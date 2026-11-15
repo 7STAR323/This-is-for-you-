@@ -12,14 +12,18 @@ import com.ares.callguard.domain.model.SetupStep
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
-/** Works out which phone settings still stand between ARES and working protection. */
-class SetupChecker @Inject constructor(
+/**
+ * The single place that knows which phone settings ARES needs and whether each is granted.
+ * It only ever reads the real state from Android, so a step is never shown as done on trust.
+ */
+class PermissionOrchestrator @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
+    private val notifications = context.getSystemService(NotificationManager::class.java)
 
     fun missingSteps(): List<SetupStep> = SetupStep.entries.filterNot(::isDone)
 
-    private fun isDone(step: SetupStep): Boolean = when (step) {
+    fun isDone(step: SetupStep): Boolean = when (step) {
         SetupStep.SHOW_NOTIFICATIONS ->
             NotificationManagerCompat.from(context).areNotificationsEnabled()
 
@@ -30,11 +34,13 @@ class SetupChecker @Inject constructor(
 
         SetupStep.FULL_SCREEN_ALERTS ->
             Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
-                context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+                notifications.canUseFullScreenIntent()
 
         SetupStep.KEEP_AWAKE ->
             context.getSystemService(PowerManager::class.java)
                 .isIgnoringBatteryOptimizations(context.packageName)
+
+        SetupStep.DO_NOT_DISTURB_ACCESS -> notifications.isNotificationPolicyAccessGranted
     }
 
     private fun isGranted(permission: String) =

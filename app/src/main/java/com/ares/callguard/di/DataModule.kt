@@ -47,7 +47,9 @@ object DataModule {
     @Provides
     @Singleton
     fun database(@ApplicationContext context: Context): AresDatabase =
-        Room.databaseBuilder(context, AresDatabase::class.java, "ares.db").build()
+        Room.databaseBuilder(context, AresDatabase::class.java, "ares.db")
+            .addMigrations(AresDatabase.MIGRATION_1_2)
+            .build()
 
     @Provides
     fun peopleDao(database: AresDatabase) = database.peopleDao()

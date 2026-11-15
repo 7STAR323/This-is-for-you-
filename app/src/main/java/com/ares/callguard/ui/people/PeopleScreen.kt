@@ -13,7 +13,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Call
-import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -161,7 +165,11 @@ fun PlatformIcon(platform: Platform, modifier: Modifier = Modifier) {
     Icon(
         imageVector = when (platform) {
             Platform.SIM -> Icons.Rounded.Call
-            Platform.WHATSAPP -> Icons.Rounded.Chat
+            Platform.WHATSAPP -> Icons.AutoMirrored.Rounded.Chat
+            Platform.TELEGRAM -> Icons.AutoMirrored.Rounded.Send
+            Platform.MESSENGER -> Icons.Rounded.Forum
+            Platform.INSTAGRAM -> Icons.Rounded.PhotoCamera
+            Platform.SNAPCHAT -> Icons.Rounded.Bolt
         },
         contentDescription = platform.label,
         tint = MaterialTheme.colorScheme.outline,

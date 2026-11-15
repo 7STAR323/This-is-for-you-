@@ -7,7 +7,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.ares.callguard.domain.model.GuardSettings
+import com.ares.callguard.domain.model.Platform
 import com.ares.callguard.domain.model.VibrationStyle
 import com.ares.callguard.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +39,10 @@ class DataStoreSettingsRepository @Inject constructor(
                 ?: defaults.vibrationStyle,
             raiseVolumeForAlerts = prefs[RAISE_VOLUME] ?: defaults.raiseVolumeForAlerts,
             keepAwakeStepsConfirmed = prefs[KEEP_AWAKE_CONFIRMED] ?: defaults.keepAwakeStepsConfirmed,
+            numberMatchOnly = prefs[NUMBER_MATCH_ONLY] ?: defaults.numberMatchOnly,
+            platformsSeenRinging = prefs[PLATFORMS_SEEN_RINGING].orEmpty()
+                .mapNotNull { name -> Platform.entries.firstOrNull { it.name == name } }
+                .toSet(),
         )
     }
 
@@ -47,6 +53,8 @@ class DataStoreSettingsRepository @Inject constructor(
         prefs[VIBRATION_STYLE] = settings.vibrationStyle.name
         prefs[RAISE_VOLUME] = settings.raiseVolumeForAlerts
         prefs[KEEP_AWAKE_CONFIRMED] = settings.keepAwakeStepsConfirmed
+        prefs[NUMBER_MATCH_ONLY] = settings.numberMatchOnly
+        prefs[PLATFORMS_SEEN_RINGING] = settings.platformsSeenRinging.map { it.name }.toSet()
         if (settings.ringtoneUri == null) {
             prefs.remove(RINGTONE_URI)
         } else {
@@ -62,5 +70,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val VIBRATION_STYLE = stringPreferencesKey("vibration_style")
         val RAISE_VOLUME = booleanPreferencesKey("raise_volume_for_alerts")
         val KEEP_AWAKE_CONFIRMED = booleanPreferencesKey("keep_awake_steps_confirmed")
+        val NUMBER_MATCH_ONLY = booleanPreferencesKey("number_match_only")
+        val PLATFORMS_SEEN_RINGING = stringSetPreferencesKey("platforms_seen_ringing")
     }
 }

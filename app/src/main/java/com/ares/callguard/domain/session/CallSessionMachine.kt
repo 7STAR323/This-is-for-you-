@@ -137,7 +137,9 @@ class CallSessionMachine(private val priority: PriorityLevel) {
                 effects += SessionEffect.Record(CallOutcome.STOPPED_BY_YOU)
             } else {
                 effects += SessionEffect.ShowMissedCall
-                effects += SessionEffect.Record(CallOutcome.MISSED)
+                effects += SessionEffect.Record(
+                    if (alertWasShown) CallOutcome.MISSED_AFTER_ALERT else CallOutcome.MISSED,
+                )
             }
 
             else -> error("$ending does not end a call")

@@ -91,7 +91,10 @@ fun AresNavigation(showWelcome: Boolean) {
                 )
             }
             composable(Routes.HOME) {
-                HomeScreen(onAddPerson = { navController.navigate(Routes.ADD_PERSON) })
+                HomeScreen(
+                    onAddPerson = { navController.navigate(Routes.ADD_PERSON) },
+                    onOpenSettings = { navController.switchTab(Routes.SETTINGS) },
+                )
             }
             composable(Routes.PEOPLE) {
                 PeopleScreen(

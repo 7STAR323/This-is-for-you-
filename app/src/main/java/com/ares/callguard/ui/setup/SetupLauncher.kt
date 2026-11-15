@@ -18,7 +18,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.core.app.ActivityCompat
 import com.ares.callguard.detection.CallNotificationListener
 import com.ares.callguard.domain.model.SetupStep
-import com.ares.callguard.guard.SetupChecker
+import com.ares.callguard.guard.PermissionOrchestrator
 
 /**
  * Returns a function that takes the user straight to the place where [SetupStep] is granted:
@@ -56,11 +56,13 @@ fun rememberSetupLauncher(onReturned: () -> Unit): (SetupStep) -> Unit {
                     }
 
                 SetupStep.SEE_PHONE_CALLS ->
-                    permissionDialog.launch(SetupChecker.PHONE_PERMISSIONS.toTypedArray())
+                    permissionDialog.launch(PermissionOrchestrator.PHONE_PERMISSIONS.toTypedArray())
 
                 SetupStep.SEE_APP_CALLS -> settingsPage.launchSafely(notificationAccess(context), context)
                 SetupStep.FULL_SCREEN_ALERTS -> settingsPage.launchSafely(fullScreenAlerts(context), context)
                 SetupStep.KEEP_AWAKE -> settingsPage.launchSafely(batteryExemption(context), context)
+                SetupStep.DO_NOT_DISTURB_ACCESS ->
+                    settingsPage.launchSafely(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS), context)
             }
         }
     }

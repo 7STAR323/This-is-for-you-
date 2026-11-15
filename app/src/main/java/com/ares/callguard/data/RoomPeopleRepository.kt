@@ -28,6 +28,7 @@ class RoomPeopleRepository @Inject constructor(
             photoPath = person.photoPath,
             priority = person.priority,
             enabled = person.enabled,
+            platforms = person.platforms,
         ),
         numbers = person.phoneNumbers.map(String::trim).filter(String::isNotEmpty).distinct(),
         identities = person.identities
@@ -45,6 +46,7 @@ class RoomPeopleRepository @Inject constructor(
         name = person.name,
         photoPath = person.photoPath,
         phoneNumbers = numbers.map { it.number },
+        platforms = person.platforms,
         identities = identities.map { PlatformIdentity(it.platform, it.displayName) },
         priority = person.priority,
         enabled = person.enabled,

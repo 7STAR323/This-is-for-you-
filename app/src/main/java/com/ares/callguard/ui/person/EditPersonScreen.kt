@@ -9,14 +9,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -33,7 +30,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ares.callguard.domain.model.PriorityLevel
 import com.ares.callguard.ui.components.AresTopBar
 import com.ares.callguard.ui.components.LoadingState
 import com.ares.callguard.ui.theme.Spacing
@@ -41,7 +37,7 @@ import com.ares.callguard.ui.theme.Spacing
 @Composable
 fun EditPersonScreen(onDone: () -> Unit, viewModel: PersonFormViewModel = hiltViewModel()) {
     val form by viewModel.form.collectAsStateWithLifecycle()
-    val recentNames by viewModel.recentWhatsAppNames.collectAsStateWithLifecycle()
+    val recentNames by viewModel.recentCallerNames.collectAsStateWithLifecycle()
     var confirmRemove by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(form.isFinished) { if (form.isFinished) onDone() }
@@ -74,28 +70,27 @@ fun EditPersonScreen(onDone: () -> Unit, viewModel: PersonFormViewModel = hiltVi
                 onCheckedChange = viewModel::setEnabled,
             )
 
+            SectionTitle("When they call")
             PriorityChoice(form.priority, viewModel::setPriority)
 
+            SectionTitle("Phone numbers")
             PhoneNumberFields(
                 numbers = form.phoneNumbers,
+                internationalForm = viewModel::internationalForm,
                 onChange = viewModel::setPhoneNumber,
                 onAdd = viewModel::addPhoneNumber,
                 onRemove = viewModel::removePhoneNumber,
             )
 
-            WhatsAppNameField(
-                name = form.whatsAppName,
-                onChange = viewModel::setWhatsAppName,
+            SectionTitle("How they call you")
+            PlatformChooser(
+                form = form,
                 recentNames = recentNames,
-                sharedWith = form.sharesWhatsAppNameWith,
+                onToggle = viewModel::setPlatformEnabled,
+                onNameChange = viewModel::setAppName,
             )
 
-            if (!form.canSave) {
-                Text(
-                    "Add a name, and a phone number or WhatsApp name, to save.",
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
+            form.problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
             Button(
                 onClick = viewModel::save,
@@ -153,43 +148,6 @@ fun SwitchRow(
 }
 
 @Composable
-private fun PriorityChoice(selected: PriorityLevel, onSelect: (PriorityLevel) -> Unit) {
-    Column(Modifier.selectableGroup()) {
-        Text("When they call", style = MaterialTheme.typography.titleMedium)
-        PriorityOption(
-            title = "Ring through",
-            description = "A loud alert if the call is still ringing and your phone is silent.",
-            selected = selected == PriorityLevel.RING_THROUGH,
-            onClick = { onSelect(PriorityLevel.RING_THROUGH) },
-        )
-        PriorityOption(
-            title = "Missed-call alert only",
-            description = "No loud alert while ringing, but you're told clearly if you miss them.",
-            selected = selected == PriorityLevel.MISSED_ALERT_ONLY,
-            onClick = { onSelect(PriorityLevel.MISSED_ALERT_ONLY) },
-        )
-    }
-}
-
-@Composable
-private fun PriorityOption(title: String, description: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .selectable(selected, role = Role.RadioButton, onClick = onClick)
-            .padding(vertical = Spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-    ) {
-        RadioButton(selected = selected, onClick = null)
-        Column {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+private fun SectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleMedium)
 }

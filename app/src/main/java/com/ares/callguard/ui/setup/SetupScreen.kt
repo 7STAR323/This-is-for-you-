@@ -72,7 +72,7 @@ fun SetupScreen(
                 if (onFinishWelcome != null) {
                     "Your phone stays silent for the world. The few people you choose still get " +
                         "through. ARES needs your phone's permission for a few things first."
-                } else if (missing.isEmpty()) {
+                } else if (missing.none { it.isRequired }) {
                     "Everything ARES needs is allowed."
                 } else {
                     "ARES can't protect your calls until these are allowed."
@@ -101,7 +101,7 @@ fun SetupScreen(
                         .fillMaxWidth()
                         .heightIn(min = 56.dp),
                 ) {
-                    Text(if (missing.isEmpty()) "Continue" else "Continue, I'll finish later")
+                    Text(if (missing.none { it.isRequired }) "Continue" else "Continue, I'll finish later")
                 }
             }
         }

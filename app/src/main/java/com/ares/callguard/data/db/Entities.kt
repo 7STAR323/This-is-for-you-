@@ -1,11 +1,13 @@
 package com.ares.callguard.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
+import androidx.room.TypeConverter
 import com.ares.callguard.domain.model.CallOutcome
 import com.ares.callguard.domain.model.Platform
 import com.ares.callguard.domain.model.PriorityLevel
@@ -17,7 +19,19 @@ data class PersonEntity(
     val photoPath: String?,
     val priority: PriorityLevel,
     val enabled: Boolean,
+    /** Comma-separated [Platform] names; see [PlatformSetConverter]. */
+    @ColumnInfo(defaultValue = "") val platforms: Set<Platform> = emptySet(),
 )
+
+class PlatformSetConverter {
+    @TypeConverter
+    fun toText(platforms: Set<Platform>): String = platforms.joinToString(",") { it.name }
+
+    // Unknown names are skipped so a database written by a newer build still opens.
+    @TypeConverter
+    fun fromText(text: String): Set<Platform> =
+        text.split(',').mapNotNull { name -> Platform.entries.firstOrNull { it.name == name } }.toSet()
+}
 
 @Entity(
     tableName = "phone_numbers",
