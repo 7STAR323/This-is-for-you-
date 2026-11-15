@@ -116,8 +116,25 @@ class CallNotificationClassifierTest {
     }
 
     @Test
-    fun `group summaries are ignored`() {
-        assertNull(kindOf(whatsApp(category = "call", callType = 1, groupSummary = true)))
+    fun `a ringing call marked as a group summary is still a ringing call`() {
+        // Seen on an OPPO Reno with WhatsApp: channel voip_notification_15, call style,
+        // full screen, two buttons, and the group-summary flag set.
+        val seenOnDevice = whatsApp(
+            category = "call",
+            template = CALL_STYLE,
+            callType = 1,
+            channelId = "voip_notification_15",
+            fullScreen = true,
+            actions = 2,
+            groupSummary = true,
+        )
+        assertEquals(CallNotificationKind.INCOMING, kindOf(seenOnDevice))
+    }
+
+    @Test
+    fun `a group summary is not guessed to be a missed call from its wording`() {
+        assertNull(kindOf(whatsApp(groupSummary = true, text = "2 missed calls")))
+        assertEquals(CallNotificationKind.MISSED, kindOf(whatsApp(groupSummary = true, category = "missed_call")))
     }
 
     @Test

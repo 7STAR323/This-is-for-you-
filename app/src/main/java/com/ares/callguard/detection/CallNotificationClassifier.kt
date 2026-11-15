@@ -31,8 +31,6 @@ object CallNotificationClassifier {
         platformByPackage.filterValues { it == platform }.keys.toList()
 
     fun kindOf(notification: NotificationSnapshot): CallNotificationKind? {
-        if (notification.isGroupSummary) return null
-
         val usesCallStyle = notification.template == CALL_STYLE || notification.callType != 0
         val isCall = usesCallStyle || notification.category == CATEGORY_CALL
 
@@ -47,7 +45,10 @@ object CallNotificationClassifier {
             // offers only "hang up".
             isCall && (notification.hasFullScreenIntent || notification.actionCount >= 2) ->
                 CallNotificationKind.INCOMING
-            looksLikeMissedCall(notification) -> CallNotificationKind.MISSED
+            // WhatsApp marks its ringing notification as a group summary, so that flag must
+            // not hide a real call. It only disqualifies the weaker guess below, where a
+            // summary such as "3 missed calls" names no single caller.
+            !notification.isGroupSummary && looksLikeMissedCall(notification) -> CallNotificationKind.MISSED
             else -> null
         }
     }
@@ -87,6 +88,7 @@ object CallNotificationClassifier {
             append(" ongoing=").append(yesNo(notification.isOngoing))
             append(" timer=").append(yesNo(notification.showsChronometer))
             append(" buttons=").append(notification.actionCount)
+            if (notification.isGroupSummary) append(" groupSummary=yes")
             append(" name=").append(yesNo(caller.displayNames.isNotEmpty()))
             append(" number=").append(yesNo(caller.phoneNumbers.isNotEmpty()))
         }
