@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">ARES Call Guard</string>
+
+    <string name="channel_watching">Protection status</string>
+    <string name="channel_alert">Important call alerts</string>
+    <string name="channel_missed">Missed important calls</string>
+
+    <string name="status_watching">Watching for important calls</string>
+    <string name="alert_reason">Your important call needs attention</string>
+    <string name="stop_alert">Stop alert</string>
+    <string name="missed_call_title">You missed %1$s</string>
+    <string name="missed_call_text">%1$s call</string>
+    <string name="call_back">Call back</string>
+    <string name="dismiss">Dismiss</string>
+</resources>
